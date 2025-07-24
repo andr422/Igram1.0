@@ -249,15 +249,32 @@ function renderHistory() {
       updatePercentages(); saveProgress(); undoStack.push(btn); showUndo();
     }
 
-    function sendClickToGoogle(protocol, goal, responseType) {
-      fetch('https://script.google.com/macros/s/AKfycbzu1szsSlgORc4uFgbhy5LvFdCF99UiVuEbzCe_K7UqLvZlmVanUbp6r4pukXbvXZs/exec', {
-        method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-      protocol:   protocolName,     // именно совпадающее имя листа: "Протокол 1"
-      results:    [pct1, pct2, …],  // массив процентов по выбранным целям
-      date:       …,                // по желанию
-      child:      …                 // по желанию
-})
+function sendClickToGoogle(protocol) {
+  // 1) Собираем проценты текущей сессии для выбранных целей
+  const wrapper = document
+    .querySelector(`.protocol-container[data-index="${protocol.match(/\\d+/)}"]`);
+  const percEls = wrapper.querySelectorAll('.percent');
+  const results = Array.from(percEls).map(el => {
+    const t = el.textContent.trim();
+    return (t === '—' ? null : parseInt(t));
+  });
+
+  // 2) Строим тело запроса
+  const payload = {
+    protocol: protocol,
+    results:  results,
+    date:     localStorage.getItem('session_date'),
+    child:    localStorage.getItem('child_name')
+  };
+
+  // 3) Отправляем
+  fetch('https://script.google.com/macros/s/AKfycbzu1szsSlgORc4uFgbhy5LvFdCF99UiVuEbzCe_K7UqLvZlmVanUbp6r4pukXbvXZs/exec', {
+    method:  'POST',
+    mode:    'no-cors',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(payload)
+  }).catch(console.error);
+}
 
     function showUndo() {
       undoBanner.style.display = 'block';
