@@ -45,7 +45,7 @@
   <!-- Модалка выбора целей -->
   <div id="goal-selector-modal">
     <div class="modal-content">
-      <h3>Выберите цели (до 3)</h3>
+      <h3>Выберите цели</h3>
       <div id="goal-options"></div>
       <button onclick="saveSelectedGoals()">Сохранить</button>
       <button onclick="closeGoalSelector()">Отмена</button>
@@ -91,7 +91,7 @@
         const cb = document.createElement('input');
         cb.type='checkbox'; cb.id=`g${j}`; cb.value=j;
         if(saved.includes(j)) cb.checked=true;
-        cb.onchange = ()=>{ if(opts.querySelectorAll('input:checked').length>3) cb.checked=false; };
+        cb.onchange = ()=>{ if(opts.querySelectorAll('input:checked').length>10) cb.checked=false; };
         const lb = document.createElement('label'); lb.htmlFor=cb.id; lb.textContent=text;
         const dv = document.createElement('div'); dv.append(cb,lb);
         opts.appendChild(dv);
