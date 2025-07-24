@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Ежедневный ABA Чек-лист</title>
   <style>
-    body { font-family: sans-serif; margin:0; padding:16px; max-width:960px; margin:auto; background:#f8f9fa; }
+    body { font-family:sans-serif; margin:0; padding:16px; max-width:960px; margin:auto; background:#f8f9fa; }
     h2,h3 { text-align:center; margin-bottom:16px; }
     .controls { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
     body.editing .btn-set button { pointer-events:none; opacity:0.5; }
@@ -23,17 +23,12 @@
     .prev-percent::before { content:'Пред. сессии: '; font-weight:bold; }
     #clearBtn { padding:8px 16px; font-size:14px; border:none; border-radius:8px; background:#dc3545; color:#fff; cursor:pointer; }
     #clearBtn:hover { background:#c82333; }
+    #undo-banner { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#e0e0e0; padding:8px 16px; border-radius:20px; font-size:14px; display:none; box-shadow:0 2px 6px rgba(0,0,0,0.1); cursor:pointer; }
+    .nav-left-floating { position:fixed; bottom:20px; left:20px; }
+    .nav-left-floating a { background:#007bff; color:#fff; padding:14px 18px; border-radius:30px; text-decoration:none; }
+    /* Модалка выбора целей */ 
     #goal-selector-modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); justify-content:center; align-items:center; }
     #goal-selector-modal .modal-content { background:#fff; padding:20px; border-radius:8px; max-width:400px; max-height:80%; overflow:auto; }
-    #undo-banner { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#e0e0e0; padding:8px 16px; border-radius:20px; font-size:14px; display:none; box-shadow:0 2px 6px rgba(0,0,0,0.1); cursor:pointer; }
-    .history-session h3 { margin:12px 0 4px; }
-    .history-table { width:100%; border-collapse:collapse; margin-bottom:16px; font-size:14px; }
-    .history-table th, .history-table td { border:1px solid #ccc; padding:4px 6px; }
-    .history-table th { background:#f0f0f0; }
-    .protocol-container > button { margin-bottom:12px; padding:8px 12px; font-size:14px; border:none; border-radius:8px; background:#007bff; color:#fff; cursor:pointer; }
-    .protocol-container > button:hover { background:#0056b3; }
-    .nav-left-floating { position:fixed; bottom:20px; left:20px; }
-    .nav-left-floating a { background:#007bff; color:white; padding:14px 18px; border-radius:30px; text-decoration:none; }
   </style>
 </head>
 <body>
@@ -81,8 +76,8 @@
 
     function getProtocolsCount() {
       return Object.keys(localStorage)
-        .map(k => (k.match(/^protocol(\d+)_title$/) || [])[1])
-        .filter(n => n).map(Number)
+        .map(k => (k.match(/^protocol(\d+)_title$/)||[])[1])
+        .filter(n=>n).map(Number)
         .reduce((max,n)=>Math.max(max,n),0);
     }
 
@@ -93,7 +88,8 @@
       const saved = JSON.parse(localStorage.getItem(`protocol${idx}_selectedGoals`)||'[]');
       for(let j=1;j<=10;j++){
         const text = localStorage.getItem(`protocol${idx}_goal${j}`)||`Цель ${j}`;
-        const cb = document.createElement('input'); cb.type='checkbox'; cb.id=`g${j}`; cb.value=j;
+        const cb = document.createElement('input');
+        cb.type='checkbox'; cb.id=`g${j}`; cb.value=j;
         if(saved.includes(j)) cb.checked=true;
         cb.onchange = ()=>{ if(opts.querySelectorAll('input:checked').length>3) cb.checked=false; };
         const lb = document.createElement('label'); lb.htmlFor=cb.id; lb.textContent=text;
@@ -110,30 +106,33 @@
       const sel = [...document.querySelectorAll('#goal-options input:checked')].map(cb=>+cb.value);
       localStorage.setItem(`protocol${idx}_selectedGoals`, JSON.stringify(sel));
       closeGoalSelector();
-      renderDaily();
-      renderHistory();
+      renderDaily(); renderHistory();
     }
 
-    function sendSessionToGoogle({protocol,results,date,child}) {
-      fetch('https://script.google.com/macros/s/AKfycbzu1szsSlgORc4uFgbhy5LvFdCF99UiVuEbzCe_K7UqLvZlmVanUbp6r4pukXbvXZs/exec', {
-        method: 'POST',
-        mode: 'no-cors',
+    function sendSessionToGoogle({protocol,goals,date,child}) {
+      fetch('https://script.google.com/macros/s/AKfycbzSRVNVzQaVlaro-h5Obi14WEeUSFWXY4URSDATJ10WA02CodogGQUNfzTGGrTBDtv8/exec', {
+        method:'POST',
+        mode:'no-cors',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ protocol, results, date, child })
+        body:JSON.stringify({protocol,goals,date,child})
       }).catch(console.error);
     }
 
     function clearData() {
-      const date = localStorage.getItem('session_date') || new Date().toISOString().split('T')[0];
-      const child = localStorage.getItem('child_name') || '';
-      // отправляем по каждому протоколу
+      const date = localStorage.getItem('session_date')||new Date().toISOString().split('T')[0];
+      const child = localStorage.getItem('child_name')||'';
       document.querySelectorAll('.protocol-container').forEach(pc=>{
+        // собираем массив {name, percent}
+        const gBlocks = pc.querySelectorAll('.block');
+        const goals = Array.from(gBlocks).map(block=>{
+          const name = block.querySelector('.goal-label').textContent.trim();
+          const t = block.querySelector('.percent').textContent.trim();
+          return { name, percent: (t==='—'?null:parseInt(t)) };
+        });
         const protocol = pc.querySelector('h3').textContent;
-        const res = Array.from(pc.querySelectorAll('.percent'))
-          .map(el=>{ const t=el.textContent.trim(); return t==='—'?null:parseInt(t); });
-        sendSessionToGoogle({protocol,results:res,date,child});
+        sendSessionToGoogle({protocol,goals,date,child});
       });
-      // сохраняем историю локально
+      // локальная история
       const session = { date, data: [] };
       document.querySelectorAll('.protocol-container').forEach(pc=>{
         const arr = [...pc.querySelectorAll('.percent')].map(e=>{
@@ -144,7 +143,7 @@
       const hist = JSON.parse(localStorage.getItem('aba_history')||'[]');
       hist.push(session); if(hist.length>10) hist.shift();
       localStorage.setItem('aba_history',JSON.stringify(hist));
-      // чистим UI
+      // очистка UI
       document.querySelectorAll('.count').forEach(e=>e.textContent='0');
       updatePercentages(); saveProgress(); renderHistory();
     }
@@ -156,8 +155,7 @@
       const cnt = getProtocolsCount();
       for(let i=1;i<=cnt;i++){
         const wrapper = document.createElement('div');
-        wrapper.className='protocol-container';
-        wrapper.dataset.index=i;
+        wrapper.className='protocol-container'; wrapper.dataset.index=i;
         const title = localStorage.getItem(`protocol${i}_title`)||`Протокол ${i}`;
         const sel   = JSON.parse(localStorage.getItem(`protocol${i}_selectedGoals`)||'[]');
         const toShow= sel.length?sel:[1,2,3];
@@ -165,9 +163,11 @@
           <button onclick="openGoalSelector(${i})">Выбрать цели</button>`;
         toShow.forEach((j,rowPos)=>{
           const txt = localStorage.getItem(`protocol${i}_goal${j}`)||`Цель ${j}`;
-          const prevArr = last3.map(sess=>{ const v=sess.data[i-1]?.[rowPos]; return v==null?'—':v+'%'; });
+          const prevArr = last3.map(sess=>{
+            const v = sess.data[i-1]?.[rowPos]; return v==null?'—':v+'%';
+          });
           const block = document.createElement('div'); block.className='block';
-          block.innerHTML = `
+          block.innerHTML=`
             <div class="goal-label">${txt}</div>
             <div class="btn-set">
               <div><button class="btn-success" onclick="increment(this)">✅</button><div class="count">0</div></div>
@@ -189,48 +189,34 @@
       historyContainer.innerHTML = '<h2>История сессий</h2>';
       if(!hist.length){ historyContainer.innerHTML+='<p>Нет сохранённых сессий.</p>'; return; }
       for(let i=1;i<=cnt;i++){
-        const title = localStorage.getItem(`protocol${i}_title`)||`Протокол ${i}`;
-        const sel   = JSON.parse(localStorage.getItem(`protocol${i}_selectedGoals`)||'[]')||[1,2,3];
-        const sec = document.createElement('div'); sec.className='history-session';
-        const hdr = document.createElement('h3'); hdr.textContent=title; sec.appendChild(hdr);
-        const tbl = document.createElement('table'); tbl.className='history-table';
-        const thead = tbl.createTHead();
-        const hr = thead.insertRow();
-        hr.insertCell().textContent='Цель';
+        const title=localStorage.getItem(`protocol${i}_title`)||`Протокол ${i}`;
+        const sel  = JSON.parse(localStorage.getItem(`protocol${i}_selectedGoals`)||'[]')||[1,2,3];
+        const sec  = document.createElement('div'); sec.className='history-session';
+        const hdr  = document.createElement('h3'); hdr.textContent=title; sec.appendChild(hdr);
+        const tbl  = document.createElement('table'); tbl.className='history-table';
+        const thead=tbl.createTHead(); const hr=thead.insertRow(); hr.insertCell().textContent='Цель';
         hist.forEach(sess=>hr.insertCell().textContent=sess.date);
-        const tbody = tbl.createTBody();
+        const tbody=tbl.createTBody();
         sel.forEach((gIdx,k)=>{
-          const tr = tbody.insertRow();
-          tr.insertCell().textContent = localStorage.getItem(`protocol${i}_goal${gIdx}`)||`Цель ${gIdx}`;
-          hist.forEach(sess=> {
-            const v = sess.data[i-1]?.[k];
-            tr.insertCell().textContent = v==null?'—':v+'%';
+          const tr=tbody.insertRow(); tr.insertCell().textContent=localStorage.getItem(`protocol${i}_goal${gIdx}`)||`Цель ${gIdx}`;
+          hist.forEach(sess=>{
+            const v=sess.data[i-1]?.[k]; tr.insertCell().textContent=v==null?'—':v+'%';
           });
         });
-        sec.appendChild(tbl);
-        historyContainer.appendChild(sec);
+        sec.appendChild(tbl); historyContainer.appendChild(sec);
       }
     }
 
     function increment(btn) {
       if(btn.disabled) return;
-      const cntEl = btn.nextElementSibling;
-      cntEl.textContent = +cntEl.textContent + 1;
-      updatePercentages();
-      saveProgress();
-      undoStack.push(btn);
-      showUndo();
+      const cntEl=btn.nextElementSibling; cntEl.textContent=+cntEl.textContent+1;
+      updatePercentages(); saveProgress(); undoStack.push(btn); showUndo();
     }
-
-    function showUndo(){
-      undoBanner.style.display='block';
-      clearTimeout(window.undoTimeout);
+    function showUndo(){ undoBanner.style.display='block'; clearTimeout(window.undoTimeout);
       window.undoTimeout=setTimeout(()=>{ if(!undoStack.length) undoBanner.style.display='none'; },5000);
     }
-    undoBanner.onclick = ()=>{
-      if(undoStack.length){
-        const b=undoStack.pop(), c=b.nextElementSibling;
-        c.textContent=Math.max(+c.textContent-1,0);
+    undoBanner.onclick=()=>{
+      if(undoStack.length){ const b=undoStack.pop(),c=b.nextElementSibling; c.textContent=Math.max(+c.textContent-1,0);
         updatePercentages(); saveProgress();
       }
       if(!undoStack.length) undoBanner.style.display='none';
@@ -239,14 +225,10 @@
     function updatePercentages(){
       document.querySelectorAll('.block').forEach(block=>{
         const counts=[...block.querySelectorAll('.count')].map(d=>+d.textContent);
-        const total=counts.reduce((s,v)=>s+v,0), el=block.querySelector('.percent');
-        if(total===0){
-          el.textContent='—'; el.className='percent';
-        } else {
-          const pct=Math.round(counts[0]/total*100);
-          el.textContent=pct+'%';
-          el.className='percent '+(pct>=80?'green':pct>=50?'orange':'red');
-        }
+        const total=counts.reduce((s,v)=>s+v,0); const el=block.querySelector('.percent');
+        if(total===0){ el.textContent='—'; el.className='percent'; }
+        else{ const pct=Math.round(counts[0]/total*100); el.textContent=pct+'%';
+          el.className='percent '+(pct>=80?'green':pct>=50?'orange':'red'); }
       });
     }
 
