@@ -252,9 +252,12 @@ function renderHistory() {
     function sendClickToGoogle(protocol, goal, responseType) {
       fetch('https://script.google.com/macros/s/AKfycbzu1szsSlgORc4uFgbhy5LvFdCF99UiVuEbzCe_K7UqLvZlmVanUbp6r4pukXbvXZs/exec', {
         method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ protocol, goal, response: responseType })
-      }).catch(console.error);
-    }
+        body: JSON.stringify({
+      protocol:   protocolName,     // именно совпадающее имя листа: "Протокол 1"
+      results:    [pct1, pct2, …],  // массив процентов по выбранным целям
+      date:       …,                // по желанию
+      child:      …                 // по желанию
+})
 
     function showUndo() {
       undoBanner.style.display = 'block';
