@@ -183,60 +183,55 @@
       }
     }
 
-function renderHistory() {
-  const hist = JSON.parse(localStorage.getItem('aba_history') || '[]');
-  const cnt  = getProtocolsCount();
-  historyContainer.innerHTML = '<h2>История сессий</h2>';
-  if (!hist.length) {
-    historyContainer.innerHTML += '<p>Нет сохранённых сессий.</p>';
-    return;
-  }
-  // Для каждого протокола своя таблица
-  for (let i = 1; i <= cnt; i++) {
-    const title = localStorage.getItem(`protocol${i}_title`) || `Протокол ${i}`;
-    const sel   = JSON.parse(localStorage.getItem(`protocol${i}_selectedGoals`) || '[]') || [1,2,3];
+    function renderHistory() {
+      const hist = JSON.parse(localStorage.getItem('aba_history') || '[]');
+      const cnt  = getProtocolsCount();
+      historyContainer.innerHTML = '<h2>История сессий</h2>';
+      if (!hist.length) {
+        historyContainer.innerHTML += '<p>Нет сохранённых сессий.</p>';
+        return;
+      }
+      for (let i = 1; i <= cnt; i++) {
+        const title = localStorage.getItem(`protocol${i}_title`) || `Протокол ${i}`;
+        const sel   = JSON.parse(localStorage.getItem(`protocol${i}_selectedGoals`) || '[]') || [1,2,3];
 
-    const sec = document.createElement('div');
-    sec.className = 'history-session';
-    const hdr = document.createElement('h3');
-    hdr.textContent = title;
-    sec.appendChild(hdr);
+        const sec = document.createElement('div');
+        sec.className = 'history-session';
+        const hdr = document.createElement('h3');
+        hdr.textContent = title;
+        sec.appendChild(hdr);
 
-    const tbl = document.createElement('table');
-    tbl.className = 'history-table';
+        const tbl = document.createElement('table');
+        tbl.className = 'history-table';
 
-    // Шапка с датами
-    const thead = tbl.createTHead();
-    const hr    = thead.insertRow();
-    const th0   = document.createElement('th');
-    th0.textContent = 'Цель';
-    hr.appendChild(th0);
-    hist.forEach(sess => {
-      const th = document.createElement('th');
-      th.textContent = sess.date;
-      hr.appendChild(th);
-    });
+        const thead = tbl.createTHead();
+        const hr    = thead.insertRow();
+        const th0   = document.createElement('th');
+        th0.textContent = 'Цель';
+        hr.appendChild(th0);
+        hist.forEach(sess => {
+          const th = document.createElement('th');
+          th.textContent = sess.date;
+          hr.appendChild(th);
+        });
 
-    // Тело: каждая выбранная цель в строке
-    const tbody = tbl.createTBody();
-    sel.forEach((gIdx, k) => {
-      const tr = tbody.insertRow();
-      // Текст цели
-      const cell0 = tr.insertCell();
-      cell0.textContent = localStorage.getItem(`protocol${i}_goal${gIdx}`) || `Цель ${gIdx}`;
-      // Проценты за каждую сессию (или “—”)
-      hist.forEach(sess => {
-        const cell = tr.insertCell();
-        const arr  = sess.data[i-1] || [];
-        const v    = arr[k];
-        cell.textContent = v == null ? '—' : v + '%';
-      });
-    });
+        const tbody = tbl.createTBody();
+        sel.forEach((gIdx, k) => {
+          const tr = tbody.insertRow();
+          const cell0 = tr.insertCell();
+          cell0.textContent = localStorage.getItem(`protocol${i}_goal${gIdx}`) || `Цель ${gIdx}`;
+          hist.forEach(sess => {
+            const cell = tr.insertCell();
+            const arr  = sess.data[i-1] || [];
+            const v    = arr[k];
+            cell.textContent = v == null ? '—' : v + '%';
+          });
+        });
 
-    sec.appendChild(tbl);
-    historyContainer.appendChild(sec);
-  }
-}
+        sec.appendChild(tbl);
+        historyContainer.appendChild(sec);
+      }
+    }
 
     function increment(btn) {
       if (btn.disabled) return;
@@ -244,19 +239,28 @@ function renderHistory() {
       const block = btn.closest('.block');
       const proto = btn.closest('.protocol-container').querySelector('h3').textContent;
       const goal = block.querySelector('.goal-label').textContent;
-      const resp = btn.classList.contains('btn-success') ? '✅' : btn.classList.contains('btn-prompt') ? '🤝' : '➖';
-      sendClickToGoogle(proto, goal, resp);
+      const respEmoji = btn.classList.contains('btn-success') ? '✅' : btn.classList.contains('btn-prompt') ? '🤝' : '➖';
+      sendClickToGoogle(proto, goal, respEmoji);
       updatePercentages(); saveProgress(); undoStack.push(btn); showUndo();
     }
 
+    // === ВАЖНО: здесь перекодировка эмодзи в символы для Google Sheets ===
     function sendClickToGoogle(protocol, goal, responseType) {
+      let mapped;
+      if (responseType === '✅') mapped = ' +';
+      else if (responseType === '➖') mapped = ' -';
+      else if (responseType === '🤝') mapped = 'P';
+      else mapped = responseType;
+
       fetch('https://script.google.com/macros/s/AKfycbzu1szsSlgORc4uFgbhy5LvFdCF99UiVuEbzCe_K7UqLvZlmVanUbp6r4pukXbvXZs/exec', {
-        method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ protocol, goal, response: responseType })
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ protocol, goal, response: mapped })
       }).catch(console.error);
     }
 
-    function showUndo() {
+    function showUndo(){
       undoBanner.style.display = 'block';
       clearTimeout(window.undoTimeout);
       window.undoTimeout = setTimeout(() => { if (!undoStack.length) undoBanner.style.display = 'none'; }, 5000);
