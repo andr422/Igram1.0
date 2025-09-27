@@ -246,19 +246,31 @@
 
     // === ВАЖНО: здесь перекодировка эмодзи в символы для Google Sheets ===
     function sendClickToGoogle(protocol, goal, responseType) {
-      let mapped;
-      if (responseType === '✅') mapped = ' +';
-      else if (responseType === '➖') mapped = ' -';
-      else if (responseType === '🤝') mapped = 'P';
-      else mapped = responseType;
+  // Перекодировка эмодзи -> символы для таблицы
+  let mapped;
+  if (responseType === '✅') mapped = ' +';
+  else if (responseType === '➖') mapped = ' -';
+  else if (responseType === '🤝') mapped = 'P';
+  else mapped = responseType;
 
-      fetch('https://script.google.com/macros/s/AKfycbzu1szsSlgORc4uFgbhy5LvFdCF99UiVuEbzCe_K7UqLvZlmVanUbp6r4pukXbvXZs/exec', {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ protocol, goal, response: mapped })
-      }).catch(console.error);
-    }
+  // Дата сессии (берём из summary, если нет — сегодняшняя)
+  const session = localStorage.getItem('session_date') || new Date().toISOString().split('T')[0];
+  // Имя ребёнка (опционально, если ввели в summary)
+  const child = localStorage.getItem('child_name') || '';
+
+  fetch('https://script.google.com/macros/s/AKfycbzu1szsSlgORc4uFgbhy5LvFdCF99UiVuEbzCe_K7UqLvZlmVanUbp6r4pukXbvXZs/exec', {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      protocol,
+      goal,
+      response: mapped,   // ' +', ' -', 'P'
+      session,            // 'YYYY-MM-DD' — ключ сессии
+      child               // опционально
+    })
+  }).catch(console.error);
+}
 
     function showUndo(){
       undoBanner.style.display = 'block';
