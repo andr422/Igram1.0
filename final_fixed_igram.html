@@ -253,22 +253,19 @@
   else if (responseType === '🤝') mapped = 'P';
   else mapped = responseType;
 
-  // Дата сессии (берём из summary, если нет — сегодняшняя)
-  const session = localStorage.getItem('session_date') || new Date().toISOString().split('T')[0];
-  // Имя ребёнка (опционально, если ввели в summary)
-  const child = localStorage.getItem('child_name') || '';
-
-  fetch('https://script.google.com/macros/s/AKfycbxQLxIEg0Q2uHdesaSnmlmL2ogeuwU_57ujm7JGEXuyAM_DdwB3TIP4Jkm83JhCSlYo/exec', {
-    method: 'POST',
-    mode: 'no-cors',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      protocol,
-      goal,
-      response: mapped,   // ' +', ' -', 'P'
-      session,            // 'YYYY-MM-DD' — ключ сессии
-      child               // опционально
-    })
+// Возьмём сегодняшнюю дату в формате "dd.MM.yyyy"
+const today = new Date().toLocaleDateString('ru-RU');
+fetch('https://script.google.com/macros/s/AKfycbxw5usFkP0ZeveT2PJ2CBweICCpMysbf1i1mwIwkOUaCGwwI3W2tVuY_t3ADJxMuzo4/exec', {
+  method: 'POST',
+  mode: 'no-cors',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    protocol: protocol,
+    goal: goal,
+    response: mapped,
+    session: today    // <-- только дата, без времени
+  })
+});
   }).catch(console.error);
 }
 
