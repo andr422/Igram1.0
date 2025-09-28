@@ -110,17 +110,27 @@
     }
 
     // Сохраняем выбранные цели и очищаем результаты для новой выборки
-    function saveSelectedGoals() {
-      const idx  = window.currentProtocol;
-      const sel  = [...document.querySelectorAll('#goal-options input:checked')].map(cb => +cb.value);
-      localStorage.setItem(`protocol${idx}_selectedGoals`, JSON.stringify(sel));
-      // Очищаем счётчики, чтобы предыдущие проценты не переносились
-      localStorage.removeItem('aba_counts');
-      closeGoalSelector();
-      renderDaily();
-      loadProgress();
-      renderHistory();
-    }
+function saveSelectedGoals() {
+  const idx = window.currentProtocol;
+  const sel = [...document.querySelectorAll('#goal-options input:checked')].map(cb => +cb.value);
+  localStorage.setItem(`protocol${idx}_selectedGoals`, JSON.stringify(sel));
+  // Обновляем названия выбранных целей
+  const goalNames = sel.map(j => localStorage.getItem(`protocol${idx}_goal${j}`) || '');
+  localStorage.setItem(`protocol${idx}_goalNames`, JSON.stringify(goalNames));
+  // Очищаем проценты: проходим по aba_history и затираем данные текущего протокола
+  let hist = JSON.parse(localStorage.getItem('aba_history') || '[]');
+  hist = hist.map(sess => {
+    sess.data[idx - 1] = sel.map(() => null);  // протоколы нумеруются с 1
+    return sess;
+  });
+  localStorage.setItem('aba_history', JSON.stringify(hist));
+  // ещё очищаем локальные счётчики, чтобы на экране не осталось прежних процентов
+  localStorage.removeItem('aba_counts');
+  closeGoalSelector();
+  renderDaily();    // перерисовываем
+  loadProgress();   // сбрасываем счётчики
+  renderHistory();  // обновляем историю
+}
 
     function increment(btn) {
       if (btn.disabled) return;
@@ -181,25 +191,34 @@
       updatePercentages();
     }
 
-    function renderDaily() {
-      const hist = JSON.parse(localStorage.getItem('aba_history') || '[]');
-      const last3 = hist.slice(-3);
-      dailyContainer.innerHTML = '';
-      const cnt = getProtocolsCount();
-      for (let i = 1; i <= cnt; i++) {
-        const wrapper = document.createElement('div');
-        wrapper.className = 'protocol-container';
-        wrapper.dataset.index = i;
-        const title = localStorage.getItem(`protocol${i}_title`) || `Протокол ${i}`;
-        const sel   = JSON.parse(localStorage.getItem(`protocol${i}_selectedGoals`) || '[]');
-        const toShow = sel.length ? sel : [1, 2, 3];
-        wrapper.innerHTML = `<h3>${title}</h3><button onclick="openGoalSelector(${i})">Выбрать цели</button>`;
-        toShow.forEach((j, rowPos) => {
-          const txt = localStorage.getItem(`protocol${i}_goal${j}`) || `Цель ${j}`;
-          const prevArr = last3.map(sess => {
-            const v = sess.data[i - 1]?.[rowPos];
-            return (v == null ? '—' : v + '%');
-          });
+function renderDaily() {
+  const hist = JSON.parse(localStorage.getItem('aba_history') || '[]');
+  const last3 = hist.slice(-3);
+  dailyContainer.innerHTML = '';
+  const cnt = getProtocolsCount();
+  for (let i = 1; i <= cnt; i++) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'protocol-container';
+    wrapper.dataset.index = i;
+    const title = localStorage.getItem(`protocol${i}_title`) || `Протокол ${i}`;
+
+    // вот здесь читаем сохранённые имена выбранных целей
+    const savedNames = JSON.parse(localStorage.getItem(`protocol${i}_goalNames`) || '[]');
+
+    // выбранные цели для отображения
+    const sel = JSON.parse(localStorage.getItem(`protocol${i}_selectedGoals`) || '[]');
+    const toShow = sel.length ? sel : [1, 2, 3];
+
+    // дальше идёт вывод кнопки и перебор целей…
+    wrapper.innerHTML = `<h3>${title}</h3><button onclick="openGoalSelector(${i})">Выбрать цели</button>`;
+    toShow.forEach((j, rowPos) => {
+      const txt = localStorage.getItem(`protocol${i}_goal${j}`) || `Цель ${j}`;
+      // проверяем совпадение с сохранённым именем; если цель новая, прошлые проценты не показываем
+      const isSame = savedNames[rowPos] === txt;
+      const prevArr = last3.map(sess => {
+        const v = sess.data[i - 1]?.[rowPos];
+        return (isSame && v != null) ? v + '%' : '—';
+      });
           const prev = prevArr.join(' | ');
           const block = document.createElement('div');
           block.className = 'block';
