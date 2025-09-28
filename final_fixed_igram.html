@@ -9,24 +9,36 @@
     h2, h3 { text-align: center; }
     .controls { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
     body.editing .btn-set button { pointer-events:none; opacity:0.5; }
+
     .protocol-container { background:#fff; border-radius:12px; padding:16px; margin-bottom:24px; box-shadow:0 2px 6px rgba(0,0,0,0.1); }
-    .block { margin-bottom:16px; }
+    .block { margin-bottom:16px; padding: 8px; border-radius: 8px; }
+    .block.mastered { border: 2px solid green; background: #e6ffe6; }
+
     .goal-label { display:block; padding:8px; background:#e9ecef; border-radius:4px; margin-bottom:8px; }
+
     .btn-set { display:flex; justify-content:space-around; gap:12px; margin-bottom:8px; }
     .btn-set button { flex:1; padding:18px; font-size:26px; border:none; border-radius:12px; }
     .btn-success{ background:#d4edda; } .btn-prompt{ background:#fff3cd; } .btn-error{ background:#f8d7da; }
     .count { text-align:center; font-weight:bold; font-size:16px; margin-top:6px; }
+
     .percent { text-align:right; font-weight:bold; }
+    .percent.mastered { color: green; font-weight: bold; }
+
     .prev-percent { font-size:12px; color:#555; margin-top:4px; }
     .prev-percent::before { content:'Пред. сессии: '; font-weight:bold; }
+
     #clearBtn { padding:8px 16px; font-size:14px; border:none; border-radius:8px; background:#dc3545; color:#fff; cursor:pointer; transition:background 0.2s; }
     #clearBtn:hover { background:#c82333; }
+
     #goal-selector-modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); justify-content:center; align-items:center; }
     #goal-selector-modal .modal-content { background:#fff; padding:20px; border-radius:8px; max-width:400px; max-height:80%; overflow:auto; }
+
     #undo-banner { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#e0e0e0; padding:8px 16px; border-radius:20px; font-size:14px; display:none; box-shadow:0 2px 6px rgba(0,0,0,0.1); cursor:pointer; }
+
     .history-table { width:100%; border-collapse:collapse; margin-bottom:16px; font-size:14px; }
     .history-table th, .history-table td { border:1px solid #ccc; padding:4px 6px; }
     .history-table th { background:#f0f0f0; }
+
     .nav-left-floating { position:fixed; bottom:20px; left:20px; }
     .nav-left-floating a { background:#007bff; color:white; padding:14px 18px; border-radius:30px; text-decoration:none; }
   </style>
@@ -80,58 +92,99 @@
         .reduce((max, n) => Math.max(max, n), 0);
     }
 
-    function openGoalSelector(idx) {
-      window.currentProtocol = idx;
-      const opts = document.getElementById('goal-options');
-      opts.innerHTML = '';
-      const saved = JSON.parse(localStorage.getItem(`protocol${idx}_selectedGoals`) || '[]');
-      for (let j = 1; j <= 10; j++) {
-        const text = localStorage.getItem(`protocol${idx}_goal${j}`) || `Цель ${j}`;
-        const cb   = document.createElement('input');
-        cb.type  = 'checkbox';
-        cb.id    = `g${j}`;
-        cb.value = j;
-        if (saved.includes(j)) cb.checked = true;
-        cb.onchange = () => {
-          if (opts.querySelectorAll('input:checked').length > 10) cb.checked = false;
-        };
-        const lb  = document.createElement('label');
-        lb.htmlFor = cb.id;
-        lb.textContent = text;
-        const dv  = document.createElement('div');
-        dv.append(cb, lb);
-        opts.append(dv);
+    // === Определение мастерства ===
+    function checkMastery(goalHistory) {
+      const last3 = goalHistory.slice(-3).filter(v => v != null);
+      return last3.length === 3 && last3.every(v => v >= 80);
+    }
+
+    function renderDaily() {
+      const hist = JSON.parse(localStorage.getItem('aba_history') || '[]');
+      const last3 = hist.slice(-3);
+      dailyContainer.innerHTML = '';
+      const cnt = getProtocolsCount();
+      for (let i = 1; i <= cnt; i++) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'protocol-container';
+        wrapper.dataset.index = i;
+        const title = localStorage.getItem(`protocol${i}_title`) || `Протокол ${i}`;
+        const sel = JSON.parse(localStorage.getItem(`protocol${i}_selectedGoals`) || '[]');
+        const toShow = sel.length ? sel : [1,2,3];
+        wrapper.innerHTML = `<h3>${title}</h3><button onclick="openGoalSelector(${i})">Выбрать цели</button>`;
+
+        toShow.forEach((j,rowPos) => {
+          const txt = localStorage.getItem(`protocol${i}_goal${j}`) || `Цель ${j}`;
+          const prevArr = last3.map(sess => sess.data[i-1]?.[rowPos] ?? null);
+          const prevPct = prevArr.map(v => v==null?'—':v+'%').join(' | ');
+          const mastered = checkMastery(prevArr);
+
+          const block = document.createElement('div');
+          block.className = 'block' + (mastered ? ' mastered' : '');
+          block.innerHTML = `
+            <div class="goal-label">${txt}</div>
+            <div class="btn-set">
+              <div><button class="btn-success" onclick="increment(this)">✅</button><div class="count">0</div></div>
+              <div><button class="btn-prompt"  onclick="increment(this)">🤝</button><div class="count">0</div></div>
+              <div><button class="btn-error"   onclick="increment(this)">➖</button><div class="count">0</div></div>
+            </div>
+            <div class="percent">${mastered ? 'Мастерство ✓' : '—'}</div>
+            <div class="prev-percent">${prevPct}</div>
+          `;
+          wrapper.append(block);
+        });
+        dailyContainer.append(wrapper);
       }
-      document.getElementById('goal-selector-modal').style.display = 'flex';
     }
 
-    function closeGoalSelector() {
-      document.getElementById('goal-selector-modal').style.display = 'none';
+    function renderHistory() {
+      const hist = JSON.parse(localStorage.getItem('aba_history') || '[]');
+      const cnt  = getProtocolsCount();
+      historyContainer.innerHTML = '<h2>История сессий</h2>';
+      if (!hist.length) {
+        historyContainer.innerHTML += '<p>Нет сохранённых сессий.</p>';
+        return;
+      }
+      for (let i = 1; i <= cnt; i++) {
+        const title = localStorage.getItem(`protocol${i}_title`) || `Протокол ${i}`;
+        const sel   = JSON.parse(localStorage.getItem(`protocol${i}_selectedGoals`) || '[]') || [1,2,3];
+        const sec   = document.createElement('div');
+        sec.className = 'history-session';
+        const hdr    = document.createElement('h3');
+        hdr.textContent = title;
+        sec.appendChild(hdr);
+
+        const tbl    = document.createElement('table');
+        tbl.className = 'history-table';
+        const thead  = tbl.createTHead();
+        const hr     = thead.insertRow();
+        const th0    = document.createElement('th');
+        th0.textContent = 'Цель';
+        hr.appendChild(th0);
+        hist.forEach(sess => {
+          const th = document.createElement('th');
+          th.textContent = sess.date;
+          hr.appendChild(th);
+        });
+
+        const tbody = tbl.createTBody();
+        sel.forEach((gIdx, k) => {
+          const tr = tbody.insertRow();
+          const cell0 = tr.insertCell();
+          cell0.textContent = localStorage.getItem(`protocol${i}_goal${gIdx}`) || `Цель ${gIdx}`;
+          hist.forEach(sess => {
+            const cell = tr.insertCell();
+            const arr  = sess.data[i - 1] || [];
+            const v    = arr[k];
+            const mastered = checkMastery(arr);
+            cell.textContent = v == null ? '—' : v + '%' + (mastered ? ' ✓' : '');
+          });
+        });
+        sec.appendChild(tbl);
+        historyContainer.appendChild(sec);
+      }
     }
 
-    // Сохраняем выбранные цели и очищаем результаты для новой выборки
-function saveSelectedGoals() {
-  const idx = window.currentProtocol;
-  const sel = [...document.querySelectorAll('#goal-options input:checked')].map(cb => +cb.value);
-  localStorage.setItem(`protocol${idx}_selectedGoals`, JSON.stringify(sel));
-  // Обновляем названия выбранных целей
-  const goalNames = sel.map(j => localStorage.getItem(`protocol${idx}_goal${j}`) || '');
-  localStorage.setItem(`protocol${idx}_goalNames`, JSON.stringify(goalNames));
-  // Очищаем проценты: проходим по aba_history и затираем данные текущего протокола
-  let hist = JSON.parse(localStorage.getItem('aba_history') || '[]');
-  hist = hist.map(sess => {
-    sess.data[idx - 1] = sel.map(() => null);  // протоколы нумеруются с 1
-    return sess;
-  });
-  localStorage.setItem('aba_history', JSON.stringify(hist));
-  // ещё очищаем локальные счётчики, чтобы на экране не осталось прежних процентов
-  localStorage.removeItem('aba_counts');
-  closeGoalSelector();
-  renderDaily();    // перерисовываем
-  loadProgress();   // сбрасываем счётчики
-  renderHistory();  // обновляем историю
-}
-
+    // === Остальной код increment / undo / clearData / sendSessionResults ===
     function increment(btn) {
       if (btn.disabled) return;
       const cntEl = btn.nextElementSibling;
@@ -173,7 +226,9 @@ function saveSelectedGoals() {
           const ok = counts[0];
           const pct = Math.round(ok / total * 100);
           el.textContent = pct + '%';
-          el.className = 'percent ' + (pct >= 80 ? 'green' : pct >= 50 ? 'orange' : 'red');
+          if (pct >= 80) el.className = 'percent green';
+          else if (pct >= 50) el.className = 'percent orange';
+          else el.className = 'percent red';
         }
       });
     }
@@ -191,99 +246,7 @@ function saveSelectedGoals() {
       updatePercentages();
     }
 
-function renderDaily() {
-  const hist = JSON.parse(localStorage.getItem('aba_history') || '[]');
-  const last3 = hist.slice(-3);
-  dailyContainer.innerHTML = '';
-  const cnt = getProtocolsCount();
-  for (let i = 1; i <= cnt; i++) {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'protocol-container';
-    wrapper.dataset.index = i;
-    const title = localStorage.getItem(`protocol${i}_title`) || `Протокол ${i}`;
-
-    // вот здесь читаем сохранённые имена выбранных целей
-    const savedNames = JSON.parse(localStorage.getItem(`protocol${i}_goalNames`) || '[]');
-
-    // выбранные цели для отображения
-    const sel = JSON.parse(localStorage.getItem(`protocol${i}_selectedGoals`) || '[]');
-    const toShow = sel.length ? sel : [1, 2, 3];
-
-    // дальше идёт вывод кнопки и перебор целей…
-    wrapper.innerHTML = `<h3>${title}</h3><button onclick="openGoalSelector(${i})">Выбрать цели</button>`;
-    toShow.forEach((j, rowPos) => {
-      const txt = localStorage.getItem(`protocol${i}_goal${j}`) || `Цель ${j}`;
-      // проверяем совпадение с сохранённым именем; если цель новая, прошлые проценты не показываем
-      const isSame = savedNames[rowPos] === txt;
-      const prevArr = last3.map(sess => {
-        const v = sess.data[i - 1]?.[rowPos];
-        return (isSame && v != null) ? v + '%' : '—';
-      });
-          const prev = prevArr.join(' | ');
-          const block = document.createElement('div');
-          block.className = 'block';
-          block.innerHTML = `
-            <div class="goal-label">${txt}</div>
-            <div class="btn-set">
-              <div><button class="btn-success" onclick="increment(this)">✅</button><div class="count">0</div></div>
-              <div><button class="btn-prompt"  onclick="increment(this)">🤝</button><div class="count">0</div></div>
-              <div><button class="btn-error"   onclick="increment(this)">➖</button><div class="count">0</div></div>
-            </div>
-            <div class="percent">—</div>
-            <div class="prev-percent">${prev}</div>
-          `;
-          wrapper.append(block);
-        });
-        dailyContainer.append(wrapper);
-      }
-    }
-
-    function renderHistory() {
-      const hist = JSON.parse(localStorage.getItem('aba_history') || '[]');
-      const cnt  = getProtocolsCount();
-      historyContainer.innerHTML = '<h2>История сессий</h2>';
-      if (!hist.length) {
-        historyContainer.innerHTML += '<p>Нет сохранённых сессий.</p>';
-        return;
-      }
-      for (let i = 1; i <= cnt; i++) {
-        const title = localStorage.getItem(`protocol${i}_title`) || `Протокол ${i}`;
-        const sel   = JSON.parse(localStorage.getItem(`protocol${i}_selectedGoals`) || '[]') || [1,2,3];
-        const sec   = document.createElement('div');
-        sec.className = 'history-session';
-        const hdr    = document.createElement('h3');
-        hdr.textContent = title;
-        sec.appendChild(hdr);
-        const tbl    = document.createElement('table');
-        tbl.className = 'history-table';
-        const thead  = tbl.createTHead();
-        const hr     = thead.insertRow();
-        const th0    = document.createElement('th');
-        th0.textContent = 'Цель';
-        hr.appendChild(th0);
-        hist.forEach(sess => {
-          const th = document.createElement('th');
-          th.textContent = sess.date;
-          hr.appendChild(th);
-        });
-        const tbody = tbl.createTBody();
-        sel.forEach((gIdx, k) => {
-          const tr = tbody.insertRow();
-          const cell0 = tr.insertCell();
-          cell0.textContent = localStorage.getItem(`protocol${i}_goal${gIdx}`) || `Цель ${gIdx}`;
-          hist.forEach(sess => {
-            const cell = tr.insertCell();
-            const arr  = sess.data[i - 1] || [];
-            const v    = arr[k];
-            cell.textContent = v == null ? '—' : v + '%';
-          });
-        });
-        sec.appendChild(tbl);
-        historyContainer.appendChild(sec);
-      }
-    }
-
-    /** Собираем результаты и отправляем в таблицу по завершению сессии */
+    /** Отправка результатов сессии в Google Sheets */
     function clearData() {
       const date  = new Date().toLocaleDateString('ru-RU');
       const child = localStorage.getItem('child_name') || '';
@@ -321,7 +284,6 @@ function renderDaily() {
       renderHistory();
     }
 
-    /** Отправка данных за сессию */
     function sendSessionResults(sessionData) {
       fetch('https://script.google.com/macros/s/AKfycbwDHhcbVarJM2DFzBT0jjyFsSg79dcABivEm6k69hU7_jS8a3MzM-G0UvKBhuafpq1M/exec', {
         method: 'POST',
