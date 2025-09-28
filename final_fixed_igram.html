@@ -275,9 +275,11 @@
     }
 
     /** Сброс данных. Здесь мы формируем итог для каждой цели, считаем проценты и отправляем в Google */
-    function clearData() {
-      const date  = localStorage.getItem('session_date') || new Date().toLocaleDateString('ru-RU');
-      const child = localStorage.getItem('child_name') || '';
+function clearData() {
+  // Берём сегодняшнюю дату в формате "dd.MM.yyyy"
+  const date  = new Date().toLocaleDateString('ru-RU');
+  const child = localStorage.getItem('child_name') || '';
+  // дальше собираем цели, считаем проценты и вызываем sendSessionResults()
       // Сохраняем в локальную историю (для отображения в интерфейсе)
       const session = { date, data: [] };
       // Для каждого протокола собираем цели
