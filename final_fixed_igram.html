@@ -92,12 +92,65 @@
         .reduce((max, n) => Math.max(max, n), 0);
     }
 
-    // === Определение мастерства ===
+    // ================= Goal selection =================
+    function openGoalSelector(idx) {
+      window.currentProtocol = idx;
+      const opts = document.getElementById('goal-options');
+      opts.innerHTML = '';
+      const saved = JSON.parse(localStorage.getItem(`protocol${idx}_selectedGoals`) || '[]');
+      for (let j = 1; j <= 10; j++) {
+        const text = localStorage.getItem(`protocol${idx}_goal${j}`) || `Цель ${j}`;
+        const cb   = document.createElement('input');
+        cb.type  = 'checkbox';
+        cb.id    = `g${j}`;
+        cb.value = j;
+        if (saved.includes(j)) cb.checked = true;
+        cb.onchange = () => {
+          if (opts.querySelectorAll('input:checked').length > 10) cb.checked = false;
+        };
+        const lb  = document.createElement('label');
+        lb.htmlFor = cb.id;
+        lb.textContent = text;
+        const dv  = document.createElement('div');
+        dv.append(cb, lb);
+        opts.append(dv);
+      }
+      document.getElementById('goal-selector-modal').style.display = 'flex';
+    }
+
+    function closeGoalSelector() {
+      document.getElementById('goal-selector-modal').style.display = 'none';
+    }
+
+    function saveSelectedGoals() {
+      const idx  = window.currentProtocol;
+      const sel  = [...document.querySelectorAll('#goal-options input:checked')].map(cb => +cb.value);
+      localStorage.setItem(`protocol${idx}_selectedGoals`, JSON.stringify(sel));
+      // сохраняем имена выбранных целей
+      const names = sel.map(j => localStorage.getItem(`protocol${idx}_goal${j}`) || '');
+      localStorage.setItem(`protocol${idx}_goalNames`, JSON.stringify(names));
+      // очищаем историю для протокола
+      let hist = JSON.parse(localStorage.getItem('aba_history') || '[]');
+      hist = hist.map(sess => {
+        sess.data[idx - 1] = sel.map(() => null);
+        return sess;
+      });
+      localStorage.setItem('aba_history', JSON.stringify(hist));
+      // удаляем текущие счетчики
+      localStorage.removeItem('aba_counts');
+      closeGoalSelector();
+      renderDaily();
+      loadProgress();
+      renderHistory();
+    }
+
+    // =============== Mastery determination ===============
     function checkMastery(goalHistory) {
       const last3 = goalHistory.slice(-3).filter(v => v != null);
       return last3.length === 3 && last3.every(v => v >= 80);
     }
 
+    // ================ Rendering (daily, history) ================
     function renderDaily() {
       const hist = JSON.parse(localStorage.getItem('aba_history') || '[]');
       const last3 = hist.slice(-3);
@@ -184,7 +237,7 @@
       }
     }
 
-    // === Остальной код increment / undo / clearData / sendSessionResults ===
+    // ================ Interactions (counts, undo, saving) ================
     function increment(btn) {
       if (btn.disabled) return;
       const cntEl = btn.nextElementSibling;
@@ -226,9 +279,7 @@
           const ok = counts[0];
           const pct = Math.round(ok / total * 100);
           el.textContent = pct + '%';
-          if (pct >= 80) el.className = 'percent green';
-          else if (pct >= 50) el.className = 'percent orange';
-          else el.className = 'percent red';
+          el.className = 'percent ' + (pct >= 80 ? 'green' : pct >= 50 ? 'orange' : 'red');
         }
       });
     }
