@@ -123,26 +123,55 @@
     }
 
     function saveSelectedGoals() {
-      const idx  = window.currentProtocol;
-      const sel  = [...document.querySelectorAll('#goal-options input:checked')].map(cb => +cb.value);
-      localStorage.setItem(`protocol${idx}_selectedGoals`, JSON.stringify(sel));
-      // сохраняем имена выбранных целей
-      const names = sel.map(j => localStorage.getItem(`protocol${idx}_goal${j}`) || '');
-      localStorage.setItem(`protocol${idx}_goalNames`, JSON.stringify(names));
-      // очищаем историю для протокола
-      let hist = JSON.parse(localStorage.getItem('aba_history') || '[]');
-      hist = hist.map(sess => {
-        sess.data[idx - 1] = sel.map(() => null);
-        return sess;
-      });
-      localStorage.setItem('aba_history', JSON.stringify(hist));
-      // удаляем текущие счетчики
-      localStorage.removeItem('aba_counts');
-      closeGoalSelector();
-      renderDaily();
-      loadProgress();
-      renderHistory();
+  const idx = window.currentProtocol;
+
+  // какой набор целей был ранее
+  const oldSel   = JSON.parse(localStorage.getItem(`protocol${idx}_selectedGoals`) || '[]');
+  const oldNames = JSON.parse(localStorage.getItem(`protocol${idx}_goalNames`) || '[]');
+
+  // новый набор целей
+  const newSel   = [...document.querySelectorAll('#goal-options input:checked')].map(cb => +cb.value);
+  const newNames = newSel.map(j => localStorage.getItem(`protocol${idx}_goal${j}`) || '');
+
+  // сохраняем новые селекты и имена
+  localStorage.setItem(`protocol${idx}_selectedGoals`, JSON.stringify(newSel));
+  localStorage.setItem(`protocol${idx}_goalNames`, JSON.stringify(newNames));
+
+  // обновляем историю: переносим только те проценты, где имя цели совпадает
+  let history = JSON.parse(localStorage.getItem('aba_history') || '[]');
+  history = history.map(sess => {
+    const oldData = sess.data[idx - 1] || [];
+    const newData = [];
+    newNames.forEach((name, pos) => {
+      const oldIndex = oldNames.indexOf(name);
+      newData[pos] = oldIndex !== -1 ? oldData[oldIndex] : null;
+    });
+    sess.data[idx - 1] = newData;
+    return sess;
+  });
+  localStorage.setItem('aba_history', JSON.stringify(history));
+
+  // переносим счётчики только для оставшихся целей (каждая цель хранит 3 числа: [+, P, -])
+  const oldCounts = JSON.parse(localStorage.getItem('aba_counts') || '[]');
+  const newCounts = [];
+  newNames.forEach(name => {
+    const oldIndex = oldNames.indexOf(name);
+    if (oldIndex !== -1) {
+      // копируем по 3 счётчика
+      newCounts.push(oldCounts[oldIndex * 3] || '0');
+      newCounts.push(oldCounts[oldIndex * 3 + 1] || '0');
+      newCounts.push(oldCounts[oldIndex * 3 + 2] || '0');
+    } else {
+      newCounts.push('0', '0', '0');
     }
+  });
+  localStorage.setItem('aba_counts', JSON.stringify(newCounts));
+
+  closeGoalSelector();
+  renderDaily();
+  loadProgress();
+  renderHistory();
+}
 
     // =============== Mastery determination ===============
     function checkMastery(goalHistory) {
